@@ -1,0 +1,2 @@
+{"role":"user","content":"How do I reverse a linked list in place?","timestamp":"2026-02-01T10:00:00.000Z"}
+{"role":"assistant","content":"Walk the list keeping prev/curr pointers and relink curr.next to prev each step, in-place reverse of a linked list needs no extra memory.","timestamp":"2026-02-01T10:00:02.000Z"}
