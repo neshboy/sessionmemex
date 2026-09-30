@@ -104,4 +104,26 @@ describe("incremental re-indexing", () => {
     expect(after.content_hash).toBe(before.content_hash);
     expect(after.mtime_ms).not.toBe(before.mtime_ms);
   });
+
+  it("prunes the session (and its messages) for a transcript file that was deleted from disk", () => {
+    const first = indexDirectory(db, srcDir);
+    expect(first.indexed).toBe(3);
+
+    fs.rmSync(alphaPath);
+
+    const second = indexDirectory(db, srcDir);
+    expect(second.removed).toBe(1);
+    expect(second.scanned).toBe(2);
+
+    const row = db.prepare(`SELECT * FROM sessions WHERE file_path = ?`).get(alphaPath);
+    expect(row).toBeUndefined();
+
+    const stats = getStats(db);
+    expect(stats.sessionCount).toBe(2);
+
+    const orphanedMessages = db
+      .prepare(`SELECT COUNT(*) AS n FROM messages WHERE session_id NOT IN (SELECT id FROM sessions)`)
+      .get() as { n: number };
+    expect(orphanedMessages.n).toBe(0);
+  });
 });

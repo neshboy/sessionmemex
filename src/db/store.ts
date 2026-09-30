@@ -23,6 +23,14 @@ export function findSessionByPath(db: DatabaseSync, filePath: string): SessionRo
   return row;
 }
 
+/** List the id + file_path of every indexed session, for reconciling against files still on disk. */
+export function listSessionFilePaths(db: DatabaseSync): Array<{ id: number; file_path: string }> {
+  return db.prepare(`SELECT id, file_path FROM sessions`).all() as Array<{
+    id: number;
+    file_path: string;
+  }>;
+}
+
 /** Remove a session and all of its messages (FTS rows included). Caller manages the transaction. */
 export function deleteSession(db: DatabaseSync, sessionId: number): void {
   db.prepare(

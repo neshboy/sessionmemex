@@ -81,6 +81,7 @@ function cmdIndex(args: string[]): number {
       if (evt.status === "indexed") console.log(`  ${green("+ indexed")}   ${evt.filePath} (${evt.messageCount} msgs)`);
       else if (evt.status === "updated") console.log(`  ${yellow("~ updated")}   ${evt.filePath} (${evt.messageCount} msgs)`);
       else if (evt.status === "unsupported") console.log(`  ${dim("? skipped")}   ${evt.filePath} (unrecognized format)`);
+      else if (evt.status === "removed") console.log(`  ${red("- removed")}   ${evt.filePath} (file no longer exists)`);
       else if (evt.status === "error") console.log(`  ${red("! error")}     ${evt.filePath}: ${evt.error}`);
       // "unchanged" / "touched" are intentionally quiet -- that's the whole point of incremental indexing.
     },
@@ -93,9 +94,9 @@ function cmdIndex(args: string[]): number {
   console.log(
     `  scanned: ${summary.scanned}  indexed: ${green(String(summary.indexed))}  updated: ${yellow(
       String(summary.updated),
-    )}  unchanged: ${dim(String(summary.unchanged))}  unsupported: ${dim(String(summary.unsupported))}  errors: ${
-      summary.errors ? red(String(summary.errors)) : "0"
-    }`,
+    )}  unchanged: ${dim(String(summary.unchanged))}  unsupported: ${dim(String(summary.unsupported))}  removed: ${
+      summary.removed ? red(String(summary.removed)) : "0"
+    }  errors: ${summary.errors ? red(String(summary.errors)) : "0"}`,
   );
   console.log(`  ${summary.totalMessages} new messages indexed in ${elapsedMs}ms`);
   return 0;
@@ -109,6 +110,10 @@ function cmdSearch(args: string[]): number {
 
   if (!query) {
     console.error(red("Usage: sessionmemex search <query...>"));
+    return 1;
+  }
+  if (!Number.isInteger(limit) || limit <= 0) {
+    console.error(red(`Invalid --limit "${flags.limit}": must be a positive integer.`));
     return 1;
   }
   if (!fs.existsSync(dbPath)) {

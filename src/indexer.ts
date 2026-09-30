@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { detectParser } from "./parsers/registry";
-import { findSessionByPath, insertSession, deleteSession, touchSession } from "./db/store";
+import { findSessionByPath, insertSession, deleteSession, touchSession, listSessionFilePaths } from "./db/store";
 import { sha256 } from "./util/hash";
 
 export interface IndexOptions {
@@ -10,7 +10,7 @@ export interface IndexOptions {
   onFile?: (event: FileEvent) => void;
 }
 
-export type FileEventStatus = "indexed" | "updated" | "unchanged" | "touched" | "unsupported" | "error";
+export type FileEventStatus = "indexed" | "updated" | "unchanged" | "touched" | "unsupported" | "error" | "removed";
 
 export interface FileEvent {
   filePath: string;
@@ -27,6 +27,7 @@ export interface IndexSummary {
   touched: number;
   unsupported: number;
   errors: number;
+  removed: number;
   totalMessages: number;
 }
 
@@ -61,6 +62,9 @@ function walkJsonlFiles(root: string): string[] {
  * being read; files whose content hash matches a prior index are left as-is
  * (only bookkeeping columns are refreshed) so a mtime-only touch doesn't
  * trigger a needless re-parse.
+ *
+ * Previously-indexed sessions whose backing file no longer exists on disk
+ * (deleted or moved) are pruned from the index as part of the same pass.
  */
 export function indexDirectory(db: DatabaseSync, rootDir: string, opts: IndexOptions = {}): IndexSummary {
   const summary: IndexSummary = {
@@ -71,11 +75,27 @@ export function indexDirectory(db: DatabaseSync, rootDir: string, opts: IndexOpt
     touched: 0,
     unsupported: 0,
     errors: 0,
+    removed: 0,
     totalMessages: 0,
   };
 
   if (!fs.existsSync(rootDir)) {
     return summary;
+  }
+
+  for (const { id, file_path: filePath } of listSessionFilePaths(db)) {
+    if (fs.existsSync(filePath)) continue;
+    db.exec("BEGIN");
+    try {
+      deleteSession(db, id);
+      db.exec("COMMIT");
+      summary.removed++;
+      opts.onFile?.({ filePath, status: "removed" });
+    } catch (err) {
+      db.exec("ROLLBACK");
+      summary.errors++;
+      opts.onFile?.({ filePath, status: "error", error: String(err) });
+    }
   }
 
   const files = walkJsonlFiles(rootDir);
